@@ -721,11 +721,13 @@ function App() {
   const canvasRef       = useRef(null);
   const ctxRef          = useRef(null);
   const menuRef         = useRef(null);
+  const aboutRef        = useRef(null);
 
   // Navigation and UI state
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isMenuMounted, setIsMenuMounted] = useState(false);
   const [activeNav, setActiveNav]   = useState('HOME');
+  const [isAboutVisible, setIsAboutVisible] = useState(false);
 
   // Synchronize menu mount/unmount with smooth exit animation
   useEffect(() => {
@@ -879,6 +881,25 @@ function App() {
 
     window.addEventListener('scroll', handleScrollSpy, { passive: true });
     return () => window.removeEventListener('scroll', handleScrollSpy);
+  }, []);
+
+  // ── Intersection Observer for About text reveal animation ─────────
+  useEffect(() => {
+    const el = aboutRef.current;
+    if (!el) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setIsAboutVisible(true);
+          observer.unobserve(el); // trigger once
+        }
+      },
+      { threshold: 0.12 }
+    );
+
+    observer.observe(el);
+    return () => observer.disconnect();
   }, []);
 
   // ── Navigation handler ────────────────────────────────────────────
@@ -1239,36 +1260,38 @@ function App() {
         {/* Section 1: Hero / Home */}
         <section
           id="home"
-          className="min-h-[160vh] w-full flex flex-col justify-end items-center pb-12 sm:pb-16 px-4 sm:px-6 pointer-events-none"
-        >
-          {/* Subtle bottom scroll prompt to lead into About */}
-          <div
-            onClick={() => handleNavClick('ABOUT')}
-            className="pointer-events-auto flex flex-col items-center gap-2.5 text-white/40 hover:text-white/80 transition-all duration-500 cursor-pointer group animate-fade-up"
-          >
-            <span className="text-[10px] sm:text-[11px] font-mono tracking-[0.2em] uppercase font-medium group-hover:tracking-[0.3em] transition-all duration-500">
-              Scroll to explore
-            </span>
-            <div className="w-5 h-8 rounded-full border border-white/15 group-hover:border-white/40 flex justify-center pt-1.5 transition-all duration-500">
-              <div className="w-1 h-2 rounded-full bg-white/60 animate-bounce"></div>
-            </div>
-          </div>
-        </section>
+          className="min-h-[160vh] w-full pointer-events-none"
+        />
 
         {/* Section 2: About Me Section (Matching Reference Layout) */}
         <section
           id="about"
+          ref={aboutRef}
           className="min-h-screen w-full flex items-center justify-center px-4 sm:px-12 md:px-16 lg:px-20 py-20 sm:py-28 lg:py-32"
         >
           <div className="w-full max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-10 lg:gap-8 items-center min-h-[50vh] lg:min-h-[60vh]">
 
             {/* Left Column: Heading & First Paragraph */}
             <div className="lg:col-span-4 flex flex-col justify-between h-full min-h-[180px] sm:min-h-[260px] lg:min-h-[460px] pointer-events-auto">
-              <h2 className="text-5xl sm:text-6xl md:text-7xl lg:text-9xl font-black tracking-tight text-white drop-shadow-[0_6px_30px_rgba(0,0,0,0.95)] select-none">
+              <h2
+                className="text-5xl sm:text-6xl md:text-7xl lg:text-9xl font-black tracking-tight text-white drop-shadow-[0_6px_30px_rgba(0,0,0,0.95)] select-none"
+                style={{
+                  opacity: isAboutVisible ? 1 : 0,
+                  transform: isAboutVisible ? 'translateY(0)' : 'translateY(32px)',
+                  transition: 'opacity 0.9s cubic-bezier(0.16, 1, 0.3, 1), transform 0.9s cubic-bezier(0.16, 1, 0.3, 1)',
+                }}
+              >
                 Hey!
               </h2>
 
-              <p className="text-sm sm:text-base md:text-lg lg:text-xl font-bold leading-snug text-white/95 max-w-md drop-shadow-[0_4px_18px_rgba(0,0,0,0.95)] mt-4 sm:mt-8 lg:mt-auto">
+              <p
+                className="text-sm sm:text-base md:text-lg lg:text-xl font-bold leading-snug text-white/95 max-w-md drop-shadow-[0_4px_18px_rgba(0,0,0,0.95)] mt-4 sm:mt-8 lg:mt-auto"
+                style={{
+                  opacity: isAboutVisible ? 1 : 0,
+                  transform: isAboutVisible ? 'translateY(0)' : 'translateY(32px)',
+                  transition: 'opacity 0.9s cubic-bezier(0.16, 1, 0.3, 1) 0.15s, transform 0.9s cubic-bezier(0.16, 1, 0.3, 1) 0.15s',
+                }}
+              >
                 I'm Entisar, a frontend developer based in Bangladesh, passionate about building modern, interactive, and visually engaging web experiences.
               </p>
             </div>
@@ -1280,7 +1303,14 @@ function App() {
 
             {/* Right Column: Second Paragraph */}
             <div className="lg:col-span-4 flex flex-col justify-center lg:justify-end h-full min-h-[120px] sm:min-h-[200px] lg:min-h-[460px] pb-2 pointer-events-auto">
-              <p className="text-xs sm:text-sm md:text-base lg:text-lg font-normal leading-relaxed text-white/80 max-w-md drop-shadow-[0_4px_18px_rgba(0,0,0,0.95)]">
+              <p
+                className="text-xs sm:text-sm md:text-base lg:text-lg font-normal leading-relaxed text-white/80 max-w-md drop-shadow-[0_4px_18px_rgba(0,0,0,0.95)]"
+                style={{
+                  opacity: isAboutVisible ? 1 : 0,
+                  transform: isAboutVisible ? 'translateY(0)' : 'translateY(32px)',
+                  transition: 'opacity 0.9s cubic-bezier(0.16, 1, 0.3, 1) 0.3s, transform 0.9s cubic-bezier(0.16, 1, 0.3, 1) 0.3s',
+                }}
+              >
                 I enjoy turning ideas and designs into polished websites using technologies like React, JavaScript, and Tailwind CSS, while continuously learning and improving my craft.
               </p>
             </div>
