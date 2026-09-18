@@ -751,6 +751,10 @@ function App() {
   const lastTimeRef     = useRef(0);
   const hasInteracted   = useRef(false);
 
+  // Track whether all frames are preloaded and ready for smooth animation
+  const [framesReady, setFramesReady] = useState(false);
+  const framesReadyRef = useRef(false);
+
   // Close menu on click outside or Escape key
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -1075,27 +1079,75 @@ function App() {
     targetFrameRef.current = progress * (TOTAL_FRAMES - 1);
   }, []);
 
-  // ── Lifecycle ──────────────────────────────────────────────────────
+  // ── Lifecycle: Phase 1 — Preload ALL frames as ImageBitmaps ────────
+  //    Decode every frame upfront so scrolling never triggers lazy loads.
+  //    Draw frame 0 immediately once it's ready (no black flash).
 
   useEffect(() => {
-    // ── Phase 1: Load all Image elements ──
-    const images = new Array(TOTAL_FRAMES);
+    let cancelled = false;
 
-    frameUrls.forEach((url, index) => {
+    // Load all Image elements in parallel
+    const images = frameUrls.map((url) => {
       const img    = new Image();
       img.decoding = 'async';
       img.src      = url;
-      img.onload   = () => {
+      return img;
+    });
+    imagesRef.current = images;
+
+    // Helper: wait for an image to finish loading
+    const whenLoaded = (img) =>
+      img.complete && img.naturalWidth > 0
+        ? Promise.resolve(img)
+        : new Promise((resolve, reject) => {
+            img.onload  = () => resolve(img);
+            img.onerror = reject;
+          });
+
+    // Decode frame 0 ASAP so the user sees content, not a black screen
+    whenLoaded(images[0])
+      .then((img) => createImageBitmap(img))
+      .then((bmp) => {
+        if (cancelled) { bmp.close(); return; }
+        bitmapsRef.current[0] = bmp;
         needsRender.current = true;
-        createImageBitmap(img).then((bmp) => {
-          bitmapsRef.current[index] = bmp;
-          needsRender.current = true;
-        }).catch(() => {});
-      };
-      images[index] = img;
+        // Draw frame 0 immediately
+        drawFrame(0);
+        lastDrawnFrame.current = 0;
+      })
+      .catch(() => {});
+
+    // Decode ALL frames in parallel
+    const decodeAll = images.map((img, idx) =>
+      whenLoaded(img)
+        .then((loadedImg) => {
+          if (cancelled) return null;
+          return createImageBitmap(loadedImg).then((bmp) => {
+            if (cancelled) { bmp.close(); return; }
+            bitmapsRef.current[idx] = bmp;
+          });
+        })
+        .catch(() => {}) // individual frame failure is non-fatal
+    );
+
+    Promise.all(decodeAll).then(() => {
+      if (cancelled) return;
+      framesReadyRef.current = true;
+      setFramesReady(true);
+      needsRender.current = true;
     });
 
-    imagesRef.current = images;
+    return () => {
+      cancelled = true;
+      bitmapsRef.current.forEach((bmp) => bmp?.close?.());
+      bitmapsRef.current = new Array(TOTAL_FRAMES).fill(null);
+    };
+  }, [drawFrame]);
+
+  // ── Lifecycle: Phase 2 — Render loop + scroll (only after frames ready) ──
+
+  useEffect(() => {
+    if (!framesReady) return;
 
     // Sync to current scroll position immediately
     calculateTargetFrame();
@@ -1167,11 +1219,8 @@ function App() {
       window.removeEventListener('scroll', handleScroll);
       window.removeEventListener('resize', handleResize);
       if (rafId.current) cancelAnimationFrame(rafId.current);
-
-      bitmapsRef.current.forEach((bmp) => bmp?.close?.());
-      bitmapsRef.current = new Array(TOTAL_FRAMES).fill(null);
     };
-  }, [calculateTargetFrame, drawFrame, prefetchAround]);
+  }, [framesReady, calculateTargetFrame, drawFrame, prefetchAround]);
 
   return (
     <div
