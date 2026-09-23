@@ -7,7 +7,7 @@ import anshThumb from './assets/anshthumb.png';
 import francesThumb from './assets/francesthumb.png';
 import ahmetThumb from './assets/ahmetthumb.png';
 
-// ── Import PNG frames via Vite eager glob ────────────────────────────
+// ── Import PNG frame URLs via Vite lazy glob (no inlining) ───────────
 const frameModules = import.meta.glob(
   './assets/ezgif-315d7a68291b5ac6-png-split/*.png',
   { eager: true, import: 'default' }
@@ -26,6 +26,8 @@ const SNAP_THRESH    = 0.01;  // Snap to target below this delta
 const VELOCITY_BOOST = 2.5;   // Max lerp multiplier for fast scrolls
 const VELOCITY_SCALE = 3.0;   // Frame-delta that triggers full boost
 const PREFETCH_RANGE = 8;     // Pre-decode ±N frames around current
+const CRITICAL_FRAMES = 5;    // Number of frames to load before showing content
+const BATCH_SIZE      = 4;    // Number of frames to decode concurrently in background
 // ─────────────────────────────────────────────────────────────────────
 
 const NAV_ITEMS = [
@@ -751,9 +753,11 @@ function App() {
   const lastTimeRef     = useRef(0);
   const hasInteracted   = useRef(false);
 
-  // Track whether all frames are preloaded and ready for smooth animation
-  const [framesReady, setFramesReady] = useState(false);
-  const framesReadyRef = useRef(false);
+  // Progressive loading: track how many frames are loaded
+  const [loadProgress, setLoadProgress] = useState(0); // 0 to TOTAL_FRAMES
+  const loadedCountRef = useRef(0);
+  const criticalReadyRef = useRef(false);
+  const allReadyRef = useRef(false);
 
   // Close menu on click outside or Escape key
   useEffect(() => {
@@ -1079,63 +1083,93 @@ function App() {
     targetFrameRef.current = progress * (TOTAL_FRAMES - 1);
   }, []);
 
-  // ── Lifecycle: Phase 1 — Preload ALL frames as ImageBitmaps ────────
-  //    Decode every frame upfront so scrolling never triggers lazy loads.
-  //    Draw frame 0 immediately once it's ready (no black flash).
+  // ── Lifecycle: Progressive frame loading ─────────────────────────────
+  //    Phase 1: Load first CRITICAL_FRAMES frames for instant display.
+  //    Phase 2: Load remaining frames in background batches.
+  //    The render loop starts immediately — no waiting for all frames.
 
   useEffect(() => {
     let cancelled = false;
 
-    // Load all Image elements in parallel
-    const images = frameUrls.map((url) => {
-      const img    = new Image();
-      img.decoding = 'async';
-      img.src      = url;
-      return img;
-    });
-    imagesRef.current = images;
+    // Helper: load a single frame as Image + decode to ImageBitmap
+    const loadAndDecodeFrame = (idx) => {
+      return new Promise((resolve) => {
+        const url = frameUrls[idx];
+        if (!url) { resolve(); return; }
 
-    // Helper: wait for an image to finish loading
-    const whenLoaded = (img) =>
-      img.complete && img.naturalWidth > 0
-        ? Promise.resolve(img)
-        : new Promise((resolve, reject) => {
-            img.onload  = () => resolve(img);
-            img.onerror = reject;
-          });
+        const img    = new Image();
+        img.decoding = 'async';
+        img.src      = url;
+        imagesRef.current[idx] = img;
 
-    // Decode frame 0 ASAP so the user sees content, not a black screen
-    whenLoaded(images[0])
-      .then((img) => createImageBitmap(img))
-      .then((bmp) => {
-        if (cancelled) { bmp.close(); return; }
-        bitmapsRef.current[0] = bmp;
-        needsRender.current = true;
-        // Draw frame 0 immediately
-        drawFrame(0);
-        lastDrawnFrame.current = 0;
-      })
-      .catch(() => {});
+        const onReady = () => {
+          if (cancelled) { resolve(); return; }
+          createImageBitmap(img)
+            .then((bmp) => {
+              if (cancelled) { bmp.close(); resolve(); return; }
+              bitmapsRef.current[idx] = bmp;
+              loadedCountRef.current += 1;
+              setLoadProgress(loadedCountRef.current);
+              needsRender.current = true;
+              resolve();
+            })
+            .catch(() => {
+              // Even without bitmap, the Image itself serves as fallback
+              loadedCountRef.current += 1;
+              setLoadProgress(loadedCountRef.current);
+              resolve();
+            });
+        };
 
-    // Decode ALL frames in parallel
-    const decodeAll = images.map((img, idx) =>
-      whenLoaded(img)
-        .then((loadedImg) => {
-          if (cancelled) return null;
-          return createImageBitmap(loadedImg).then((bmp) => {
-            if (cancelled) { bmp.close(); return; }
-            bitmapsRef.current[idx] = bmp;
-          });
-        })
-        .catch(() => {}) // individual frame failure is non-fatal
-    );
+        if (img.complete && img.naturalWidth > 0) {
+          onReady();
+        } else {
+          img.onload  = onReady;
+          img.onerror = () => {
+            loadedCountRef.current += 1;
+            setLoadProgress(loadedCountRef.current);
+            resolve();
+          };
+        }
+      });
+    };
 
-    Promise.all(decodeAll).then(() => {
+    const loadAll = async () => {
+      // ── Phase 1: Load critical frames (0..CRITICAL_FRAMES-1) sequentially ──
+      for (let i = 0; i < Math.min(CRITICAL_FRAMES, TOTAL_FRAMES); i++) {
+        if (cancelled) return;
+        await loadAndDecodeFrame(i);
+
+        // Draw frame 0 immediately so the user sees content, not a black screen
+        if (i === 0 && !cancelled) {
+          drawFrame(0);
+          lastDrawnFrame.current = 0;
+          criticalReadyRef.current = true;
+        }
+      }
+
       if (cancelled) return;
-      framesReadyRef.current = true;
-      setFramesReady(true);
-      needsRender.current = true;
-    });
+      criticalReadyRef.current = true;
+
+      // ── Phase 2: Load remaining frames in background batches ──
+      const remaining = [];
+      for (let i = CRITICAL_FRAMES; i < TOTAL_FRAMES; i++) {
+        remaining.push(i);
+      }
+
+      // Process in batches to avoid overwhelming the browser
+      for (let b = 0; b < remaining.length; b += BATCH_SIZE) {
+        if (cancelled) return;
+        const batch = remaining.slice(b, b + BATCH_SIZE);
+        await Promise.all(batch.map((idx) => loadAndDecodeFrame(idx)));
+      }
+
+      if (!cancelled) {
+        allReadyRef.current = true;
+      }
+    };
+
+    loadAll();
 
     return () => {
       cancelled = true;
@@ -1144,11 +1178,9 @@ function App() {
     };
   }, [drawFrame]);
 
-  // ── Lifecycle: Phase 2 — Render loop + scroll (only after frames ready) ──
+  // ── Lifecycle: Render loop + scroll (starts immediately) ────────────
 
   useEffect(() => {
-    if (!framesReady) return;
-
     // Sync to current scroll position immediately
     calculateTargetFrame();
     currentFrameRef.current = targetFrameRef.current;
@@ -1220,7 +1252,7 @@ function App() {
       window.removeEventListener('resize', handleResize);
       if (rafId.current) cancelAnimationFrame(rafId.current);
     };
-  }, [framesReady, calculateTargetFrame, drawFrame, prefetchAround]);
+  }, [calculateTargetFrame, drawFrame, prefetchAround]);
 
   return (
     <div
@@ -1242,6 +1274,32 @@ function App() {
           willChange: 'contents',
         }}
       />
+
+      {/* ── Subtle loading progress indicator ── */}
+      {loadProgress < TOTAL_FRAMES && (
+        <div
+          className="fixed bottom-0 left-0 w-full z-50 pointer-events-none"
+          style={{
+            opacity: loadProgress < TOTAL_FRAMES ? 1 : 0,
+            transition: 'opacity 0.6s ease-out',
+          }}
+        >
+          {/* Progress bar */}
+          <div className="w-full h-[2px] bg-white/[0.06]">
+            <div
+              className="h-full bg-white/40 transition-[width] duration-300 ease-out"
+              style={{ width: `${(loadProgress / TOTAL_FRAMES) * 100}%` }}
+            />
+          </div>
+          {/* Loading text */}
+          <div className="absolute bottom-3 right-4 flex items-center gap-2">
+            <div className="w-1.5 h-1.5 rounded-full bg-white/50 animate-pulse" />
+            <span className="text-[10px] font-mono text-white/40 tracking-wider">
+              {Math.round((loadProgress / TOTAL_FRAMES) * 100)}%
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* ── Fixed Floating Header: Entisar Tag + Glassmorphic Dropdown ── */}
       <header className="fixed top-4 sm:top-7 left-1/2 -translate-x-1/2 z-50 pointer-events-auto">
