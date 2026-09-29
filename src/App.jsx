@@ -1,5 +1,6 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import emailjs from '@emailjs/browser';
 import noctisThumb from './assets/noctisthumb.png';
 import orebiThumb from './assets/orebithumb.png';
 import nitroThumb from './assets/nitrothumb.png';
@@ -292,7 +293,8 @@ function ContactSection() {
     email: '',
     message: '',
   });
-  const [status, setStatus] = useState('idle'); // 'idle' | 'sending' | 'sent'
+  const [status, setStatus] = useState('idle'); // 'idle' | 'sending' | 'sent' | 'error'
+  const [errorMsg, setErrorMsg] = useState('');
   const [copiedType, setCopiedType] = useState(null); // 'email' | 'phone' | null
 
   const handleCopy = (text, type, e) => {
@@ -303,14 +305,41 @@ function ContactSection() {
     setTimeout(() => setCopiedType(null), 2000);
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!formData.name.trim() || !formData.email.trim() || !formData.message.trim()) return;
+    const name = formData.name.trim();
+    const email = formData.email.trim();
+    const message = formData.message.trim();
+
+    if (!name || !email || !message) return;
+
+    // Basic email format validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      setStatus('error');
+      setErrorMsg('Please enter a valid email address.');
+      return;
+    }
 
     setStatus('sending');
-    setTimeout(() => {
+    setErrorMsg('');
+
+    try {
+      await emailjs.send(
+        'service_sc5v2ix',
+        'template_5vd583k',
+        {
+          from_name: name,
+          from_email: email,
+          message: message,
+        },
+        'xpM4z1P5LlEsSm3_g'
+      );
       setStatus('sent');
-    }, 700);
+    } catch (err) {
+      setStatus('error');
+      setErrorMsg('Failed to send message. Please try again or reach out directly via email.');
+    }
   };
 
   return (
@@ -523,6 +552,7 @@ function ContactSection() {
                     onClick={() => {
                       setStatus('idle');
                       setFormData({ name: '', email: '', message: '' });
+                      setErrorMsg('');
                     }}
                     className="mt-4 px-5 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-semibold border border-white/15 transition-all cursor-pointer"
                   >
@@ -577,6 +607,14 @@ function ContactSection() {
                       className="w-full px-4 py-3.5 rounded-2xl bg-white/[0.04] hover:bg-white/[0.06] focus:bg-white/[0.08] border border-white/10 focus:border-white/30 text-white placeholder-white/30 text-sm focus:outline-none focus:ring-1 focus:ring-white/20 transition-all resize-none card-scrollbar"
                     />
                   </div>
+
+                  {/* Error Message */}
+                  {status === 'error' && errorMsg && (
+                    <div className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-red-500/10 border border-red-500/25 text-red-300 text-sm">
+                      <span className="text-red-400 text-lg shrink-0">⚠</span>
+                      <span>{errorMsg}</span>
+                    </div>
+                  )}
 
                   {/* Submit Button */}
                   <button
