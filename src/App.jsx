@@ -297,6 +297,11 @@ function ContactSection() {
   const [errorMsg, setErrorMsg] = useState('');
   const [copiedType, setCopiedType] = useState(null); // 'email' | 'phone' | null
 
+  // Initialize EmailJS with public key on first render
+  useEffect(() => {
+    emailjs.init('xpM4z1P5LlEsSm3_g');
+  }, []);
+
   const handleCopy = (text, type, e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -325,20 +330,25 @@ function ContactSection() {
     setErrorMsg('');
 
     try {
-      await emailjs.send(
+      const response = await emailjs.send(
         'service_sc5v2ix',
         'template_5vd583k',
         {
           from_name: name,
           from_email: email,
           message: message,
-        },
-        'xpM4z1P5LlEsSm3_g'
+        }
       );
+      console.log('EmailJS success:', response.status, response.text);
       setStatus('sent');
     } catch (err) {
+      console.error('EmailJS error:', err);
       setStatus('error');
-      setErrorMsg('Failed to send message. Please try again or reach out directly via email.');
+      setErrorMsg(
+        typeof err === 'string'
+          ? err
+          : err?.text || 'Failed to send message. Please try again or reach out directly via email.'
+      );
     }
   };
 
