@@ -446,11 +446,11 @@ function ContactSection() {
 
                 {/* LinkedIn */}
                 <a
-                  href="https://linkedin.com/"
+                  href="https://www.linkedin.com/in/entisardev/"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="group/soc flex flex-col items-center justify-center gap-2.5 py-4 px-3 rounded-2xl bg-white/[0.04] hover:bg-sky-600/20 border border-white/10 hover:border-sky-500/40 shadow-md hover:shadow-[0_0_20px_rgba(14,118,168,0.3)] transition-all duration-300 hover:scale-105"
-                  title="LinkedIn Profile (Placeholder)"
+                  title="LinkedIn Profile"
                 >
                   <div className="text-white/80 group-hover/soc:text-[#0A66C2] transition-colors">
                     <svg viewBox="0 0 24 24" className="w-6 h-6 fill-current">
@@ -731,6 +731,10 @@ function App() {
   const [activeNav, setActiveNav]   = useState('HOME');
   const [isAboutVisible, setIsAboutVisible] = useState(false);
 
+  // ── Loading screen state ─────────────────────────────────────────
+  const [isLoading, setIsLoading] = useState(true);
+  const loaderDismissedRef = useRef(false);
+
   // Synchronize menu mount/unmount with smooth exit animation
   useEffect(() => {
     if (isMenuOpen) {
@@ -758,6 +762,39 @@ function App() {
   const loadedCountRef = useRef(0);
   const criticalReadyRef = useRef(false);
   const allReadyRef = useRef(false);
+
+  // ── Scroll-lock and loader dismiss logic ──────────────────────────
+  useEffect(() => {
+    if (isLoading) {
+      document.documentElement.classList.add('is-loading');
+    } else {
+      document.documentElement.classList.remove('is-loading');
+    }
+    return () => document.documentElement.classList.remove('is-loading');
+  }, [isLoading]);
+
+  // Dismiss loader when ALL frames are loaded (real progress, no fake delay)
+  useEffect(() => {
+    if (loaderDismissedRef.current) return;
+    if (loadProgress >= TOTAL_FRAMES) {
+      loaderDismissedRef.current = true;
+      // Small delay so the bar visually reaches 100% before fade
+      requestAnimationFrame(() => {
+        setIsLoading(false);
+      });
+    }
+  }, [loadProgress]);
+
+  // Error timeout: if loading takes longer than 15s, dismiss anyway
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      if (!loaderDismissedRef.current) {
+        loaderDismissedRef.current = true;
+        setIsLoading(false);
+      }
+    }, 15000);
+    return () => clearTimeout(timeout);
+  }, []);
 
   // Close menu on click outside or Escape key
   useEffect(() => {
@@ -1254,11 +1291,31 @@ function App() {
     };
   }, [calculateTargetFrame, drawFrame, prefetchAround]);
 
+  const loaderPercent = TOTAL_FRAMES > 0
+    ? Math.min(Math.round((loadProgress / TOTAL_FRAMES) * 100), 100)
+    : 0;
+
   return (
     <div
       ref={containerRef}
       className="relative w-full bg-black select-none"
     >
+      {/* ── Full-Screen Loading Screen ── */}
+      <div
+        className={`loading-screen${isLoading ? '' : ' is-hidden'}`}
+        aria-hidden={!isLoading}
+      >
+        <span className="loader-logo">ENTISAR</span>
+        <div className="loader-ring" />
+        <div className="loader-progress-track">
+          <div
+            className="loader-progress-fill"
+            style={{ width: `${loaderPercent}%` }}
+          />
+        </div>
+        <span className="loader-percent">{loaderPercent}%</span>
+      </div>
+
       {/* Background Animated Canvas (Preserved Exactly) */}
       <canvas
         ref={canvasRef}
@@ -1275,8 +1332,8 @@ function App() {
         }}
       />
 
-      {/* ── Subtle loading progress indicator ── */}
-      {loadProgress < TOTAL_FRAMES && (
+      {/* ── Subtle loading progress indicator (hidden while loader is visible) ── */}
+      {!isLoading && loadProgress < TOTAL_FRAMES && (
         <div
           className="fixed bottom-0 left-0 w-full z-50 pointer-events-none"
           style={{
@@ -1420,6 +1477,27 @@ function App() {
               >
                 I enjoy turning ideas and designs into polished websites using technologies like React, JavaScript, and Tailwind CSS, while continuously learning and improving my craft.
               </p>
+
+              {/* Download Resume Button */}
+              <a
+                href="/EntisarResume.pdf"
+                download="EntisarResume.pdf"
+                className="group/dl inline-flex items-center gap-2.5 mt-5 sm:mt-6 px-5 py-2.5 sm:px-6 sm:py-3 rounded-2xl bg-white/[0.05] hover:bg-white/[0.12] backdrop-blur-xl border border-white/[0.1] hover:border-white/25 shadow-[0_4px_20px_rgba(0,0,0,0.4)] hover:shadow-[0_8px_32px_rgba(255,255,255,0.08)] transition-all duration-300 hover:-translate-y-0.5 active:scale-[0.97] w-fit"
+                style={{
+                  opacity: isAboutVisible ? 1 : 0,
+                  transform: isAboutVisible ? 'translateY(0)' : 'translateY(32px)',
+                  transition: 'opacity 0.9s cubic-bezier(0.16, 1, 0.3, 1) 0.45s, transform 0.9s cubic-bezier(0.16, 1, 0.3, 1) 0.45s',
+                }}
+              >
+                <svg viewBox="0 0 24 24" className="w-4 h-4 fill-none stroke-current text-white/70 group-hover/dl:text-white transition-colors" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="7 10 12 15 17 10" />
+                  <line x1="12" y1="15" x2="12" y2="3" />
+                </svg>
+                <span className="text-xs sm:text-sm font-bold tracking-tight text-white/85 group-hover/dl:text-white transition-colors">
+                  Download Resume
+                </span>
+              </a>
             </div>
 
           </div>

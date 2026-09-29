@@ -30,6 +30,103 @@ body {
   background-color: #000000;
 }
 
+/* ── Loading screen ── */
+
+.loading-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(ellipse at 50% 40%, rgba(15, 15, 25, 0.95), rgba(0, 0, 0, 0.98));
+  backdrop-filter: blur(40px) saturate(1.2);
+  -webkit-backdrop-filter: blur(40px) saturate(1.2);
+  transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: opacity;
+}
+
+.loading-screen.is-hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* Logo text */
+.loader-logo {
+  font-family: 'Space Grotesk', 'Plus Jakarta Sans', system-ui, sans-serif;
+  font-weight: 700;
+  font-size: clamp(1.6rem, 5vw, 2.8rem);
+  letter-spacing: 0.35em;
+  color: rgba(255, 255, 255, 0.92);
+  text-transform: uppercase;
+  user-select: none;
+  animation: loader-logo-pulse 2.8s ease-in-out infinite;
+  text-shadow: 0 0 40px rgba(255, 255, 255, 0.08);
+}
+
+@keyframes loader-logo-pulse {
+  0%, 100% { opacity: 0.85; filter: brightness(1); }
+  50%      { opacity: 1;    filter: brightness(1.15); }
+}
+
+/* Rotating ring indicator */
+.loader-ring {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.06);
+  border-top-color: rgba(255, 255, 255, 0.5);
+  animation: loader-spin 1s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+  margin-top: 2rem;
+}
+
+@keyframes loader-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Progress bar track */
+.loader-progress-track {
+  position: relative;
+  width: min(220px, 60vw);
+  height: 2px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 2px;
+  margin-top: 1.5rem;
+  overflow: hidden;
+}
+
+/* Progress bar fill */
+.loader-progress-fill {
+  height: 100%;
+  border-radius: 2px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0.55));
+  transition: width 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.12);
+}
+
+/* Progress percentage text */
+.loader-percent {
+  font-family: 'Space Grotesk', monospace;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.15em;
+  color: rgba(255, 255, 255, 0.35);
+  margin-top: 0.75rem;
+  user-select: none;
+  min-width: 3.5ch;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Lock scroll while loading */
+html.is-loading,
+html.is-loading body {
+  overflow: hidden !important;
+  height: 100% !important;
+}
+
 /* ── Scroll-triggered entrance animations ── */
 
 @keyframes fade-up {
