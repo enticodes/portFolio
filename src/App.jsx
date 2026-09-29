@@ -582,7 +582,7 @@ function ContactSection() {
                         required
                         value={formData.name}
                         onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                        placeholder="e.g. John Doe"
+                        placeholder="Your Name"
                         className="w-full px-4 py-3.5 rounded-2xl bg-white/[0.04] hover:bg-white/[0.06] focus:bg-white/[0.08] border border-white/10 focus:border-white/30 text-white placeholder-white/30 text-sm focus:outline-none focus:ring-1 focus:ring-white/20 transition-all"
                       />
                     </div>
@@ -597,7 +597,7 @@ function ContactSection() {
                         required
                         value={formData.email}
                         onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                        placeholder="e.g. john@example.com"
+                        placeholder="Your Email"
                         className="w-full px-4 py-3.5 rounded-2xl bg-white/[0.04] hover:bg-white/[0.06] focus:bg-white/[0.08] border border-white/10 focus:border-white/30 text-white placeholder-white/30 text-sm focus:outline-none focus:ring-1 focus:ring-white/20 transition-all"
                       />
                     </div>
